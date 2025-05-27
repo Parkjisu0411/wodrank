@@ -1,0 +1,149 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  MEMBER // 일반 사용자
+  MANAGER // 박스 매니저
+  ADMIN // (필요하면 시스템 관리자 등)
+}
+
+enum AuthProvider {
+  CREDENTIALS // 이메일 + 비밀번호
+  GOOGLE // 구글 소셜 로그인
+  KAKAO // 카카오 소셜 로그인
+}
+
+enum WorkoutTemplateType {
+  BOX // 박스 와드
+  NAMED // 네임드 와드
+  CUSTOM
+}
+
+enum WorkoutSectionType {
+  MAIN
+  CASH_IN
+  CASH_OUT
+  REST_BETWEEN_ROUNDS
+}
+
+enum WorkoutRecordType {
+  BOX
+  NAMED
+  CUSTOM
+}
+
+enum WorkoutLevel {
+  RXD
+  SCALE_A
+  SCALE_B
+}
+
+enum WorkoutValueType {
+  TIME
+  ROUNDS
+  WEIGHT
+}
+
+model User {
+  id         String       @id @default(uuid())
+  role       UserRole     @default(MEMBER)
+  nickname   String
+  provider   AuthProvider @default(CREDENTIALS)
+  email      String?      @unique
+  password   String?
+  providerId String?
+  createdAt  DateTime     @default(now())
+
+  WorkoutRecord WorkoutRecord[]
+  boxId         String?
+  box           Box?            @relation(fields: [boxId], references: [id])
+
+  @@map("users")
+}
+
+model Box {
+  id            String @id @default(uuid())
+  affiliateName String // 공식 지부 명칭
+  displayName   String // 사용자 노출용 상호명
+
+  address     String
+  region      String?
+  phoneNumber String?
+  affiliated  Boolean @default(false) // 공식 지부 여부
+
+  members   User[]
+  templates WorkoutTemplate[]
+}
+
+model WorkoutTemplate {
+  id          String              @id @default(uuid())
+  title       String
+  type        WorkoutTemplateType
+  description String?
+  date        DateTime?
+
+  sections      WorkoutSection[]
+  WorkoutRecord WorkoutRecord[]
+  boxId         String?
+  box           Box?             @relation(fields: [boxId], references: [id])
+}
+
+model WorkoutSection {
+  id        String             @id @default(uuid())
+  workoutId String
+  order     Int // 섹션 순서
+  type      WorkoutSectionType
+  rounds    Int? // 라운드 반복 수 (예: 5라운드)
+  duration  Int? // 초 단위 (ex: 180 for 3min), EMOM 또는 AMRAP 사용
+  notes     String?
+
+  workout   WorkoutTemplate   @relation(fields: [workoutId], references: [id])
+  movements WorkoutMovement[]
+}
+
+model WorkoutMovement {
+  id        String  @id @default(uuid())
+  sectionId String
+  order     Int
+  name      String // 운동 이름: Thruster, Pull-up 등
+  reps      Int? // 반복 수
+  weight    Int? // 무게 (kg 또는 lb)
+  time      String? // 시간 (예: "2:30")
+  notes     String?
+
+  section WorkoutSection @relation(fields: [sectionId], references: [id])
+}
+
+model WorkoutRecord {
+  id         String            @id @default(uuid())
+  userId     String
+  templateId String
+  type       WorkoutRecordType
+  level      WorkoutLevel
+  date       DateTime?
+  notes      String?
+  createdAt  DateTime          @default(now())
+
+  user     User            @relation(fields: [userId], references: [id])
+  template WorkoutTemplate @relation(fields: [templateId], references: [id])
+  results  WorkoutResult[]
+}
+
+model WorkoutResult {
+  id           String           @id @default(uuid())
+  recordId     String
+  title        String // 예: "WOD 결과", "1RM Clean"
+  value        String // 사용자가 입력한 표현 (예: "8 rounds", "12:34")
+  valueType    WorkoutValueType
+  order        Int
+  numericValue Int? // 정렬 및 비교용 수치 값 (초, 라운드 수, kg 등)
+  notes        String?
+
+  record WorkoutRecord @relation(fields: [recordId], references: [id])
+}
